@@ -19,6 +19,10 @@ admin_externalpage_setup('manualexport');
 $returnurl = '/local/rtoactivitygradeexport/manual.php';
 $submitbutton = optional_param('submitbutton', '', PARAM_RAW);
 
+// We are going to need lots of memory and time.
+raise_memory_limit(MEMORY_HUGE);
+set_time_limit(0);
+
 $systemcontext = context_system::instance();
 require_capability('local/rtoactivitygradeexport:config', $systemcontext);
 $title = get_string('manualexportheader', 'local_rtoactivitygradeexport');

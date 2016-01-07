@@ -64,12 +64,8 @@ function local_rtoactivitygradeexport_write_csv_to_file($runhow, $data) {
               }
 
               // Format the time.
-              if (!empty($r->completiontime)) {
-                  $time = date('Y-m-d', $r->completiontime);
-              } else {
-                  $time = '';
-              }
-
+              $time = (!empty($r->completiontime)) ? date('Y-m-d', $r->completiontime) : '';
+/*
               $grouplength = strlen($r->groupname);
               $strtempl = ($grouplength - 8);
               $teachername = substr($r->groupname, 0, $strtempl-1);
@@ -78,21 +74,45 @@ function local_rtoactivitygradeexport_write_csv_to_file($runhow, $data) {
               // Write the line to CSV file.
               fwrite($fh,
                       implode(',',
-                              array($r->idnumber,
-                                    $r->department,
-                                    $r->courseid,
-                                    $r->groupname,
-                                    $startdate,
-                                    $r->groupdesc,
-                                    $teachername,
-                                    $r->itemname,
-                                    $r->finalgrade,
-                                    $r->finalgradepercent,
-                                    $time
+                              array(
+                                  $r->idnumber,
+                                  $r->firstname,
+                                  $r->lastname,
+                                  $r->department,
+                                  $r->courseshortname,
+                                  $r->groupname,
+                                  $startdate,
+                                  $r->groupdesc,
+                                  $teachername,
+                                  $r->itemname,
+                                  $r->finalgrade,
+                                  $time
                               )
                       )."\r\n"
               );
+*/
+              // Write the line to CSV file.
+              fwrite($fh,
+                      implode(',',
+                              array(
+                                  $r->idnumber,
+                                  $r->firstname,
+                                  $r->lastname,
+                                  $r->department,
+                                  $r->courseshortname,
+                                  $r->groupname,
+                                  $startdate,
+                                  $r->groupdesc,
+                                  $teachername,
+                                  $r->itemname,
+                                  $r->finalgrade,
+                                  $time
+                              )
+                      )."\r\n"
+              );
+
           }
+//                                     $r->finalgradepercent,
 
           // Close the recordset to free up RDBMS memory.
           $rs->close();
@@ -119,7 +139,7 @@ function local_rtoactivitygradeexport_write_csv_to_file($runhow, $data) {
  */
 function local_rtoactivitygradeexport_get_data($from, $data = null) {
     global $DB;
-
+/*
     $sql = "
         SELECT
             CONCAT(c.id, u.idnumber, g.name, gi.id), u.id, u.lastname, u.firstname,
@@ -143,30 +163,101 @@ function local_rtoactivitygradeexport_get_data($from, $data = null) {
         GROUP BY idnumber,itemname
         ORDER BY 1,2, 3, 4, gi.sortorder
     ";
+*/
+    $sql = "
+        SELECT
+            CONCAT_WS('-', c.id, u.idnumber, g.name, y.id),
+            u.id,
+            u.lastname,
+            u.firstname,
+            c.id as courseid,
+            c.fullname as coursefullname,
+            c.shortname as courseshortname,
+            u.idnumber,
+            u.department,
+            g.name as groupname,
+            g.description as groupdesc,
+            y.itemname,
+            y.itemmodule,
+            y.finalgrade,
+            y.rawgrademax,
+            round(y.finalgrade/y.rawgrademax*100) as finalgradepercent,
+            y.timemodified as completiontime
+        FROM mdl_user u
+        JOIN
+        (
+            (
+                SELECT ue.userid as userid, e.courseid as courseid, NULL AS itemname
+                FROM mdl_user_enrolments ue
+                JOIN mdl_enrol e ON ue.enrolid = e.id
+                WHERE ue.timeend IS NOT NULL AND ue.timemodified >= :from1
+            )
+            UNION
+            (
+                SELECT gg.userid as userid, gi.courseid as courseid, gi.itemname
+                FROM mdl_grade_grades gg
+                JOIN mdl_grade_items gi
+                ON gi.id = gg.itemid
+                WHERE gg.timemodified IS NOT NULL
+                AND gg.timemodified >= :from2
+                AND gi.itemtype = 'mod'
+            )
+        ) AS x ON x.userid = u.id
+        JOIN mdl_course c ON x.courseid = c.id %%COURSECLAUSE%%
+        LEFT JOIN mdl_groups g ON g.courseid = c.id %%GROUPCLAUSE%%
+        JOIN mdl_groups_members gm ON gm.groupid = g.id  AND gm.userid = u.id
+        LEFT JOIN
+        (
+            SELECT
+                gi.id,
+                gi.itemtype,
+                gi.itemname,
+                gi.scaleid,
+                gi.itemmodule,
+                gg.finalgrade,
+                gg.rawgrademax,
+                s.scale,
+                gg.userid,
+                gi.courseid,
+                gg.timemodified,
+                round(gg.finalgrade/gg.rawgrademax*100) as finalpercent
+            FROM
+            (
+                mdl_grade_items gi
+                JOIN mdl_grade_grades gg ON gg.itemid = gi.id
+            )
+            LEFT JOIN mdl_scale s ON gi.scaleid = s.id
+            WHERE gi.itemtype = 'mod'
+        ) as y ON x.userid = y.userid AND x.courseid = y.courseid
+        GROUP BY 1,2,3,4,5,6,9,11
+    ";
 
     $params = array();
 
     if ($data)
     {
-        $params['from'] = 0;
+        $params['from1'] = time() - 60*60*24*185;
+        $params['from2'] = time() - 60*60*24*185;
         $params['course'] = $data->course;
         $params['group'] = $data->group;
 
-        $sql = str_replace("%%COURSECLAUSE%%", ($data->course) ? " AND c.id = :course " : "", $sql);
+        $sql = str_replace("%%COURSECLAUSE%%", ($data->course) ? " AND x.courseid = :course " : "", $sql);
         $sql = str_replace("%%GROUPCLAUSE%%", ($data->group != "All") ? " AND g.name = :group " : "", $sql);
-
-    } else {
+    }
+    else
+    {
         // Gets the last run time, removes the seconds from today (which is usually run early in the morning),
         // yesterday, and the day before, (so around 48 hours).
         // It will then allow the export to get the records for the last two days
         //                          seconds of today   seconds of yesterday     seconds of day before that
         $runfrom         = $from - ($from % 86400)      - 86400                  - 86400;
+    //    $runfrom          = $from - 60*60*24*185;
 
-        $params['from'] = $runfrom;
+        $params['from1'] = $runfrom;
+        $params['from2'] = $runfrom;
 
         $sql = str_replace("%%COURSECLAUSE%%", "", $sql);
         $sql = str_replace("%%GROUPCLAUSE%%", "", $sql);
-
     }
     /*
     if ($_SERVER['REMOTE_ADDR'] == '203.59.120.7')
@@ -175,7 +266,13 @@ function local_rtoactivitygradeexport_get_data($from, $data = null) {
          echo "<pre>$sql</pre>";
     }
     */
-    return $DB->get_recordset_sql($sql, $params);
+
+
+// $DB->set_debug(true);
+$r = $DB->get_recordset_sql($sql, $params);
+// $DB->set_debug(false);
+
+    return $r;
 }
 
 
@@ -185,8 +282,11 @@ function local_rtoactivitygradeexport_get_data($from, $data = null) {
  * @return array
  */
 function local_rtoactivitygradeexport_get_csv_headers() {
+
     return array(
         get_string('studentid',         'local_rtoactivitygradeexport'),
+        get_string('firstname',         'local_rtoactivitygradeexport'),
+        get_string('lastname',          'local_rtoactivitygradeexport'),
         get_string('programcourseid',   'local_rtoactivitygradeexport'),
         get_string('subjectid',         'local_rtoactivitygradeexport'),
         get_string('batch',             'local_rtoactivitygradeexport'),
@@ -195,7 +295,6 @@ function local_rtoactivitygradeexport_get_csv_headers() {
         get_string('userteacherid',     'local_rtoactivitygradeexport'),
         get_string('taskname',          'local_rtoactivitygradeexport'),
         get_string('marks',             'local_rtoactivitygradeexport'),
-        get_string('percentageresult',  'local_rtoactivitygradeexport'),
         get_string('completedtime',     'local_rtoactivitygradeexport'),
     );
 }

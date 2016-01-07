@@ -16,7 +16,7 @@ $tasks = array(
     array(
         'classname' => 'local_rtoactivitygradeexport\task\exporttocsv',
         'blocking'  => 0,
-        'minute'    => '5',
+        'minute'    => '15',
         'hour'      => '0',
         'day'       => '*',
         'dayofweek' => '*',

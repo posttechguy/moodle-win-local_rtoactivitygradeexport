@@ -12,7 +12,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2015100202;
+$plugin->version   = 2015100204;
 $plugin->requires  = 2014050100;
 $plugin->component = 'local_rtoactivitygradeexport';
 $plugin->cron      = 60;

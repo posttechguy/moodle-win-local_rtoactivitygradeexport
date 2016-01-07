@@ -30,7 +30,7 @@ class local_rtoactivitygradeexport_manual_export_form extends moodleform {
         $sql = "
             SELECT id, concat(fullname, ' - ', shortname) as name from {course} ORDER BY fullname
         ";
-
+// , "0" => "All"
         $coursenames = array("selectacourse" => get_string('selectacourse', 'local_rtoactivitygradeexport'));
 
         if ($courses = $DB->get_records_sql_menu($sql, null)) {
